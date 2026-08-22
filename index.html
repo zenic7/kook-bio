@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOOK Coffee Roasters — 쿡커피로스터즈</title>
+<meta name="description" content="쿡커피로스터즈 KOOK Coffee Roasters. 커피를 좋아하는 분들을 위한 컨텐츠를 만듭니다.">
+<style>
+  :root{
+    --hero:#375232;
+    --hero-text:#FAFAF7;
+    --ink:#1A1A1A;
+    --paper:#FAFAF7;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Avenir Next','Avenir','Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;
+    min-height:100vh;
+  }
+  .label{
+    width:100%;max-width:430px;
+    padding:48px 28px 40px;
+    display:flex;flex-direction:column;
+  }
+  .hero{text-align:center}
+  .hero .logo{
+    width:120px;height:120px;
+    border-radius:50%;
+    object-fit:cover;
+    display:block;margin:0 auto;
+  }
+  .hero .title{
+    margin-top:22px;
+    font-weight:900;
+    font-size:clamp(26px,7.5vw,32px);
+    line-height:1.1;
+    letter-spacing:0.01em;
+    text-transform:uppercase;
+  }
+  .hero .title .hl{background:var(--hero);color:var(--hero-text);padding:0 8px;display:inline-block}
+  .hero .bio{
+    margin-top:16px;
+    font-size:14.5px;line-height:1.7;
+    color:#444;
+    word-break:keep-all;
+  }
+  .hero .bio a{color:var(--hero);font-weight:700;text-decoration:none}
+  .links{margin-top:32px;display:flex;flex-direction:column;gap:10px}
+  .links a{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:16px 18px;
+    border:1.5px solid var(--ink);
+    text-decoration:none;color:var(--ink);
+    font-weight:700;font-size:15px;
+    transition:background .15s ease,color .15s ease;
+  }
+  .links a .en{
+    font-size:11px;font-weight:600;
+    letter-spacing:0.08em;text-transform:uppercase;color:#999;
+  }
+  .links a:hover,.links a:focus-visible{background:var(--hero);color:var(--hero-text);border-color:var(--hero)}
+  .links a:hover .en,.links a:focus-visible .en{color:var(--hero-text);opacity:.7}
+  .links a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .visit{margin-top:28px;display:flex;flex-direction:column;gap:10px}
+  .visit .section-t{
+    font-size:11px;font-weight:800;letter-spacing:0.1em;
+    text-transform:uppercase;color:#999;
+  }
+  .visit a{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:16px 18px;
+    background:var(--hero);color:var(--hero-text);
+    border:1.5px solid var(--hero);
+    text-decoration:none;font-weight:700;font-size:15px;
+    transition:opacity .15s ease;
+  }
+  .visit a .en{
+    font-size:11px;font-weight:600;
+    letter-spacing:0.08em;text-transform:uppercase;opacity:.7;
+  }
+  .visit a:hover,.visit a:focus-visible{opacity:.88}
+  .visit a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .footer{margin-top:44px;text-align:center}
+  .footer .slogan{
+    font-size:11px;font-weight:600;
+    letter-spacing:0.04em;color:#999;line-height:1.7;
+  }
+  .footer .brand{
+    margin-top:10px;
+    font-weight:900;font-size:13px;
+    letter-spacing:0.12em;text-transform:uppercase;
+    color:var(--hero);
+  }
+  @media (prefers-reduced-motion:reduce){.links a,.visit a{transition:none}}
+</style>
+</head>
+<body>
+<main class="label">
+
+  <header class="hero">
+    <img class="logo" src="logo.png" alt="쿡커피로스터즈 로고">
+    <h1 class="title">KOOK <span class="hl">COFFEE</span> ROASTERS</h1>
+    <p class="bio">커피를 좋아하는 분들을 위한 컨텐츠를 만듭니다.<br>GCA🏆 MOC🏅🥈🥉🥈<br><a href="https://www.instagram.com/kookcoffee_official">@kookcoffee_official</a> 쿡커피커피바</p>
+  </header>
+
+  <nav class="links">
+    <a href="https://www.instagram.com/kookwon_coffee"><span>인스타그램 — 정국원의 커피</span><span class="en">Instagram</span></a>
+    <a href="https://www.instagram.com/kookcoffee_official"><span>인스타그램 — 쿡커피 오피셜</span><span class="en">Official</span></a>
+    <a href="https://www.youtube.com/@kookwon"><span>유튜브</span><span class="en">YouTube</span></a>
+    <a href="https://www.threads.com/@kookwon_coffee"><span>스레드</span><span class="en">Threads</span></a>
+    <a href="http://kookcoffee.com"><span>원두 구매 — 스마트스토어</span><span class="en">Shop</span></a>
+  </nav>
+
+  <nav class="visit">
+    <span class="section-t">Visit &amp; Wholesale</span>
+    <a href="https://map.naver.com/p/search/%EC%BF%A1%EC%BB%A4%ED%94%BC%EB%A1%9C%EC%8A%A4%ED%84%B0%EC%A6%88%20%EC%BB%A4%ED%94%BC%EB%B0%94"><span>매장 찾아오기</span><span class="en">Map</span></a>
+    <a href="https://docs.google.com/forms/d/1qflHrpAakVopUHz_Ob6kJJq-a0fnHaOmWz6nIRIs2hw/viewform"><span>원두 납품 문의</span><span class="en">Wholesale</span></a>
+  </nav>
+
+  <footer class="footer">
+    <p class="slogan">The essence of coffee.<br>The perfection of extraction.<br>The pinnacle of quality.</p>
+    <p class="brand">KOOK COFFEE Roasters</p>
+  </footer>
+
+</main>
+</body>
+</html>
