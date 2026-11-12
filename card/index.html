@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#111111">
 <link rel="apple-touch-icon" id="icon" href="">
 <meta name="robots" content="noindex,nofollow">
+<meta name="robots" content="noindex,nofollow">
 <title>쿡카드</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@500;900&family=League+Spartan:wght@800&display=swap" rel="stylesheet">
@@ -30,13 +31,20 @@ button{flex:1;background:#2a2a2a;color:#fff;border:0;border-radius:10px;padding:
 button.main{background:#F08537;color:#111;font-size:17px;padding:15px}
 .small{font-size:12px;color:#777;line-height:1.5;margin-top:6px}
 .rv{display:flex;justify-content:space-between;font-size:12px;color:#999}
+#crop{position:fixed;inset:0;background:#000;z-index:10;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+#crop[hidden]{display:none}
+.ctop,.cbar{display:flex;gap:8px;padding:10px 12px}
+#cwrap{flex:1;min-height:0;position:relative;touch-action:none}
+#cc{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.cbar button{padding:11px 4px;font-size:14px}
+.cbar button.on{background:#F08537;color:#111}
 </style>
 </head>
 <body>
 <h1>KOOK CARD</h1>
 <div id="stage"><canvas id="cv" width="1080" height="1440"></canvas><div id="hint">아래 [사진 고르기]를 눌러<br>사진을 넣어주세요</div></div>
 <div class="panel">
-  <div class="row"><button id="pick">사진 고르기</button><button id="rot">90° 회전</button><button id="reset">위치 초기화</button></div>
+  <div class="row"><button id="pick">사진 고르기</button><button id="cropb">자르기</button><button id="rot">90° 회전</button><button id="reset">초기화</button></div>
   <input id="file" type="file" accept="image/*" hidden>
   <div class="small">사진은 손가락으로 끌어서 옮기고, 두 손가락으로 확대·축소해요.</div>
 
@@ -62,11 +70,16 @@ button.main{background:#F08537;color:#111;font-size:17px;padding:15px}
   <div class="row" style="margin-top:18px"><button class="main" id="save">이미지 저장 (1080x1440)</button></div>
   <div class="small">저장을 누르면 공유창이 떠요. "이미지 저장"을 고르면 사진 앱에 들어가요.<br>글씨는 위 120px, 아래 130px 띠를 피해 놓았어요(인스타 UI 가림 방지).</div>
 </div>
+<div id="crop" hidden>
+  <div class="ctop"><button id="cx">취소</button><button id="cdone" class="main" style="padding:11px">완료</button></div>
+  <div id="cwrap"><canvas id="cc"></canvas></div>
+  <div class="cbar"><button data-r="0" class="on">자유</button><button data-r="0.75">3:4</button><button data-r="1">1:1</button><button data-r="1.3333333">4:3</button><button id="corig">원본 복원</button></div>
+</div>
 <script>
 const W=1080,H=1440,S=2;
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 const $=id=>document.getElementById(id);
-let img=null,st={ox:0,oy:0,zoom:1,ang:0,rot:0};
+let orig=null,img=null,st={ox:0,oy:0,zoom:1,ang:0,rot:0};
 const ids=['badge','title','body','page','gA','gH'];
 // 저장된 값 복원
 try{const j=JSON.parse(localStorage.getItem('kookcard')||'{}');ids.forEach(i=>{if(j[i]!=null)$(i).value=j[i]})}catch(e){}
@@ -132,7 +145,7 @@ $('ang').addEventListener('input',e=>{st.ang=parseFloat(e.target.value);redraw()
 
 // 사진 불러오기
 $('pick').onclick=()=>$('file').click();
-$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const im=new Image();im.onload=()=>{img=im;st={ox:0,oy:0,zoom:1,ang:0,rot:0};$('zoom').value=100;$('ang').value=0;$('hint').style.display='none';redraw()};im.src=u};
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const im=new Image();im.onload=()=>{img=im;orig=im;st={ox:0,oy:0,zoom:1,ang:0,rot:0};$('zoom').value=100;$('ang').value=0;$('hint').style.display='none';redraw()};im.src=u};
 $('rot').onclick=()=>{st.rot=(st.rot+1)%4;redraw()};
 $('reset').onclick=()=>{st.ox=st.oy=0;st.zoom=1;st.ang=0;$('zoom').value=100;$('ang').value=0;redraw()};
 
@@ -147,6 +160,69 @@ stage.addEventListener('pointermove',e=>{
 });
 const up=e=>{pts.delete(e.pointerId);last=null};stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
 stage.addEventListener('wheel',e=>{e.preventDefault();st.zoom=Math.min(4,Math.max(1,st.zoom*(e.deltaY<0?1.05:.95)));$('zoom').value=Math.round(st.zoom*100);redraw()},{passive:false});
+
+
+// ===== 자르기 =====
+const cc=$('cc'),cx=cc.getContext('2d');
+let src=null,fit={s:1,dx:0,dy:0},R={x:0,y:0,w:0,h:0},ratio=0,drag=null;
+function bake(){ // 현재 회전·기울기를 반영한 캔버스
+  const iw=img.naturalWidth,ih=img.naturalHeight,ang=(st.rot*90+st.ang)*Math.PI/180;
+  const c=Math.abs(Math.cos(ang)),sn=Math.abs(Math.sin(ang));
+  let w=iw*c+ih*sn,h=iw*sn+ih*c,k=Math.min(1,3000/Math.max(w,h));
+  const o=document.createElement('canvas');o.width=Math.round(w*k);o.height=Math.round(h*k);
+  const x=o.getContext('2d');x.translate(o.width/2,o.height/2);x.rotate(ang);x.scale(k,k);x.drawImage(img,-iw/2,-ih/2);return o}
+function openCrop(){if(!img)return;src=bake();R={x:0,y:0,w:src.width,h:src.height};ratio=0;
+  document.querySelectorAll('.cbar [data-r]').forEach(b=>b.classList.toggle('on',b.dataset.r==='0'));
+  $('crop').hidden=false;cropLayout()}
+function cropLayout(){const b=cc.getBoundingClientRect(),dpr=window.devicePixelRatio||1;cc.width=b.width*dpr;cc.height=b.height*dpr;cx.setTransform(dpr,0,0,dpr,0,0);
+  const pad=16,s=Math.min((b.width-pad*2)/src.width,(b.height-pad*2)/src.height);
+  fit={s,dx:(b.width-src.width*s)/2,dy:(b.height-src.height*s)/2,bw:b.width,bh:b.height};cropDraw()}
+function cropDraw(){const {s,dx,dy,bw,bh}=fit;cx.clearRect(0,0,bw,bh);cx.fillStyle='#000';cx.fillRect(0,0,bw,bh);
+  cx.drawImage(src,dx,dy,src.width*s,src.height*s);
+  const x=dx+R.x*s,y=dy+R.y*s,w=R.w*s,h=R.h*s;
+  cx.fillStyle='rgba(0,0,0,.6)';cx.fillRect(dx,dy,src.width*s,y-dy);cx.fillRect(dx,y+h,src.width*s,dy+src.height*s-y-h);cx.fillRect(dx,y,x-dx,h);cx.fillRect(x+w,y,dx+src.width*s-x-w,h);
+  cx.strokeStyle='rgba(255,255,255,.35)';cx.lineWidth=1;cx.beginPath();
+  for(let i=1;i<3;i++){cx.moveTo(x+w*i/3,y);cx.lineTo(x+w*i/3,y+h);cx.moveTo(x,y+h*i/3);cx.lineTo(x+w,y+h*i/3)}cx.stroke();
+  cx.strokeStyle='#fff';cx.lineWidth=2;cx.strokeRect(x,y,w,h);
+  cx.strokeStyle='#F08537';cx.lineWidth=5;const L=22;cx.beginPath();
+  [[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].forEach(([px,py,a,b])=>{cx.moveTo(px,py+b*L);cx.lineTo(px,py);cx.lineTo(px+a*L,py)});cx.stroke();
+  cx.fillStyle='rgba(255,255,255,.9)';cx.font='12px sans-serif';cx.fillText(Math.round(R.w)+' x '+Math.round(R.h),x+6,y+h-8)}
+function hit(px,py){const {s,dx,dy}=fit,x=dx+R.x*s,y=dy+R.y*s,w=R.w*s,h=R.h*s,T=28;
+  const inX=px>x-T&&px<x+w+T,inY=py>y-T&&py<y+h+T;if(!inX||!inY)return null;
+  const l=Math.abs(px-x)<T,r=Math.abs(px-x-w)<T,t=Math.abs(py-y)<T,b=Math.abs(py-y-h)<T;
+  let m=(t?'t':'')+(b?'b':'')+(l?'l':'')+(r?'r':'');
+  if(m.length>2){m=(py<y+h/2?'t':'b')+(px<x+w/2?'l':'r')}
+  if(m)return m; return (px>x&&px<x+w&&py>y&&py<y+h)?'move':null}
+function pos(e){const b=cc.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]}
+cc.addEventListener('pointerdown',e=>{const [px,py]=pos(e);const m=hit(px,py);if(!m)return;cc.setPointerCapture(e.pointerId);drag={m,px,py,S:{...R},id:e.pointerId}});
+cc.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;const [px,py]=pos(e);const dx=(px-drag.px)/fit.s,dy=(py-drag.py)/fit.s,S=drag.S,m=drag.m,SW=src.width,SH=src.height,MIN=40;
+  if(m==='move'){R.x=Math.min(SW-S.w,Math.max(0,S.x+dx));R.y=Math.min(SH-S.h,Math.max(0,S.y+dy));cropDraw();return}
+  let x1=S.x,y1=S.y,x2=S.x+S.w,y2=S.y+S.h;
+  if(m.includes('l'))x1=Math.min(x2-MIN,Math.max(0,x1+dx));if(m.includes('r'))x2=Math.max(x1+MIN,Math.min(SW,x2+dx));
+  if(m.includes('t'))y1=Math.min(y2-MIN,Math.max(0,y1+dy));if(m.includes('b'))y2=Math.max(y1+MIN,Math.min(SH,y2+dy));
+  if(ratio){const hasH=/[lr]/.test(m),hasV=/[tb]/.test(m);
+    if(hasH&&hasV){let w=x2-x1,h=y2-y1;w=Math.min(w,h*ratio>w?w:w);
+      const maxW=Math.min(m.includes('l')?S.x+S.w:SW-S.x,(m.includes('t')?S.y+S.h:SH-S.y)*ratio);
+      w=Math.max(MIN,Math.min(Math.max(w,h*ratio),maxW));h=w/ratio;
+      if(m.includes('l')){x1=S.x+S.w-w;x2=S.x+S.w}else{x1=S.x;x2=S.x+w}
+      if(m.includes('t')){y1=S.y+S.h-h;y2=S.y+S.h}else{y1=S.y;y2=S.y+h}}
+    else if(hasH){let w=x2-x1;const cy=S.y+S.h/2,maxW=Math.min(SH*ratio,2*Math.min(cy,SH-cy)*ratio);w=Math.min(w,maxW);const h=w/ratio;
+      if(m.includes('l'))x1=S.x+S.w-w;else x2=S.x+w;if(m.includes('l'))x2=S.x+S.w;else x1=S.x;y1=cy-h/2;y2=cy+h/2}
+    else{let h=y2-y1;const cx0=S.x+S.w/2,maxH=Math.min(SW/ratio,2*Math.min(cx0,SW-cx0)/ratio);h=Math.min(h,maxH);const w=h*ratio;
+      if(m.includes('t'))y1=S.y+S.h-h;else y2=S.y+h;if(m.includes('t'))y2=S.y+S.h;else y1=S.y;x1=cx0-w/2;x2=cx0+w/2}}
+  R={x:x1,y:y1,w:x2-x1,h:y2-y1};cropDraw()});
+const endDrag=e=>{if(drag&&e.pointerId===drag.id)drag=null};cc.addEventListener('pointerup',endDrag);cc.addEventListener('pointercancel',endDrag);
+document.querySelectorAll('.cbar [data-r]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.cbar [data-r]').forEach(x=>x.classList.remove('on'));b.classList.add('on');ratio=parseFloat(b.dataset.r);
+  if(ratio){const w=Math.min(src.width,src.height*ratio),h=w/ratio;R={x:(src.width-w)/2,y:(src.height-h)/2,w,h}}cropDraw()});
+$('cropb').onclick=openCrop;
+$('cx').onclick=()=>{$('crop').hidden=true};
+$('corig').onclick=()=>{if(!orig)return;img=orig;st={ox:0,oy:0,zoom:1,ang:0,rot:0};$('zoom').value=100;$('ang').value=0;src=bake();R={x:0,y:0,w:src.width,h:src.height};ratio=0;
+  document.querySelectorAll('.cbar [data-r]').forEach(b=>b.classList.toggle('on',b.dataset.r==='0'));cropLayout();redraw()};
+$('cdone').onclick=()=>{const o=document.createElement('canvas');o.width=Math.round(R.w);o.height=Math.round(R.h);
+  o.getContext('2d').drawImage(src,R.x,R.y,R.w,R.h,0,0,o.width,o.height);
+  o.toBlob(b=>{const im=new Image();im.onload=()=>{img=im;st={ox:0,oy:0,zoom:1,ang:0,rot:0};$('zoom').value=100;$('ang').value=0;$('crop').hidden=true;redraw()};im.src=URL.createObjectURL(b)},'image/png')};
+window.addEventListener('resize',()=>{if(!$('crop').hidden)cropLayout()});
 
 // 저장
 $('save').onclick=()=>{cv.toBlob(async b=>{const f=new File([b],'kookcard.png',{type:'image/png'});
