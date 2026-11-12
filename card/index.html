@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="쿡카드">
+<meta name="theme-color" content="#111111">
+<link rel="apple-touch-icon" id="icon" href="">
+<meta name="robots" content="noindex,nofollow">
+<title>쿡카드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@500;900&family=League+Spartan:wght@800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:#111;color:#eee;font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}
+body{padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 30px)}
+h1{font-size:15px;margin:14px 0 10px;font-weight:700;color:#F08537;letter-spacing:.5px}
+#stage{position:relative;width:100%;max-width:440px;margin:0 auto;aspect-ratio:3/4;background:#222;border-radius:10px;overflow:hidden;touch-action:none}
+#cv{width:100%;height:100%;display:block}
+#hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:15px;pointer-events:none;text-align:center;line-height:1.6}
+.panel{max-width:440px;margin:14px auto 0}
+.row{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+label{font-size:12px;color:#999;display:block;margin:10px 0 4px}
+input[type=text],textarea{width:100%;background:#1c1c1c;border:1px solid #333;color:#fff;border-radius:8px;padding:11px;font-size:16px;font-family:inherit}
+textarea{resize:none}
+input[type=range]{width:100%}
+button{flex:1;background:#2a2a2a;color:#fff;border:0;border-radius:10px;padding:13px 8px;font-size:15px;font-weight:600}
+button.main{background:#F08537;color:#111;font-size:17px;padding:15px}
+.small{font-size:12px;color:#777;line-height:1.5;margin-top:6px}
+.rv{display:flex;justify-content:space-between;font-size:12px;color:#999}
+</style>
+</head>
+<body>
+<h1>KOOK CARD</h1>
+<div id="stage"><canvas id="cv" width="1080" height="1440"></canvas><div id="hint">아래 [사진 고르기]를 눌러<br>사진을 넣어주세요</div></div>
+<div class="panel">
+  <div class="row"><button id="pick">사진 고르기</button><button id="rot">90° 회전</button><button id="reset">위치 초기화</button></div>
+  <input id="file" type="file" accept="image/*" hidden>
+  <div class="small">사진은 손가락으로 끌어서 옮기고, 두 손가락으로 확대·축소해요.</div>
+
+  <label>배지 (왼쪽 위, 비우면 안 나와요)</label>
+  <input type="text" id="badge" value="AT THE BOOTH">
+  <label>제목 (줄바꿈 가능, [대괄호] 안은 주황색)</label>
+  <textarea id="title" rows="2">부스에서 시음하고
+구매하실 수 있어요</textarea>
+  <label>본문</label>
+  <textarea id="body" rows="3">쿡 사장의 대회 커피, 그동안 모아둔 컴페티션 커피, 이번 대회 출전 커피까지 만나보실 수 있어요.</textarea>
+  <label>쪽번호 (비우면 안 나와요)</label>
+  <input type="text" id="page" value="3 / 5">
+
+  <label><span class="rv"><span>음영 진하기</span><span id="v1"></span></span></label>
+  <input type="range" id="gA" min="0" max="100" value="82">
+  <label><span class="rv"><span>음영 높이</span><span id="v2"></span></span></label>
+  <input type="range" id="gH" min="15" max="75" value="50">
+  <label><span class="rv"><span>사진 확대</span><span id="v3"></span></span></label>
+  <input type="range" id="zoom" min="100" max="400" value="100">
+  <label><span class="rv"><span>사진 기울기</span><span id="v4"></span></span></label>
+  <input type="range" id="ang" min="-45" max="45" value="0" step="0.5">
+
+  <div class="row" style="margin-top:18px"><button class="main" id="save">이미지 저장 (1080x1440)</button></div>
+  <div class="small">저장을 누르면 공유창이 떠요. "이미지 저장"을 고르면 사진 앱에 들어가요.<br>글씨는 위 120px, 아래 130px 띠를 피해 놓았어요(인스타 UI 가림 방지).</div>
+</div>
+<script>
+const W=1080,H=1440,S=2;
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+let img=null,st={ox:0,oy:0,zoom:1,ang:0,rot:0};
+const ids=['badge','title','body','page','gA','gH'];
+// 저장된 값 복원
+try{const j=JSON.parse(localStorage.getItem('kookcard')||'{}');ids.forEach(i=>{if(j[i]!=null)$(i).value=j[i]})}catch(e){}
+function persist(){const o={};ids.forEach(i=>o[i]=$(i).value);localStorage.setItem('kookcard',JSON.stringify(o))}
+
+// 글자 한 자씩 그리기 (자간 적용)
+function runWidth(t,font,ls){ctx.font=font;let w=0;for(const c of t)w+=ctx.measureText(c).width+ls;return w}
+function drawRuns(runs,x,y,font,ls){ctx.font=font;let cx=x;for(const r of runs){ctx.fillStyle=r.c;for(const c of r.t){ctx.fillText(c,cx,y);cx+=ctx.measureText(c).width+ls}}}
+function parseRuns(line,base,hi){const out=[];const re=/\[([^\]]*)\]/g;let last=0,m;while((m=re.exec(line))){if(m.index>last)out.push({t:line.slice(last,m.index),c:base});out.push({t:m[1],c:hi});last=re.lastIndex}if(last<line.length)out.push({t:line.slice(last),c:base});return out}
+function wrap(text,font,ls,maxW){const lines=[];for(const para of text.split('\n')){const words=para.split(' ');let cur='';for(const w of words){const t=cur?cur+' '+w:w;if(runWidth(t,font,ls)<=maxW){cur=t}else{if(cur)lines.push(cur);if(runWidth(w,font,ls)>maxW){let p='';for(const c of w){if(runWidth(p+c,font,ls)>maxW){lines.push(p);p=c}else p+=c}cur=p}else cur=w}}lines.push(cur)}return lines}
+
+function draw(){
+  ctx.fillStyle='#1b1b1b';ctx.fillRect(0,0,W,H);
+  if(img){
+    const iw=(st.rot%2)?img.naturalHeight:img.naturalWidth, ih=(st.rot%2)?img.naturalWidth:img.naturalHeight;
+    const cover=Math.max(W/iw,H/ih)*st.zoom;
+    ctx.save();ctx.translate(W/2+st.ox,H/2+st.oy);ctx.rotate((st.rot*90+st.ang)*Math.PI/180);ctx.scale(cover,cover);
+    ctx.drawImage(img,-img.naturalWidth/2,-img.naturalHeight/2);ctx.restore();
+  }
+  // 음영
+  const a=$('gA').value/100, h=$('gH').value/100;
+  const gh=H*h, g=ctx.createLinearGradient(0,H,0,H-gh);
+  g.addColorStop(0,`rgba(14,22,10,${.88*a/.82})`);g.addColorStop(.45,`rgba(14,22,10,${.78*a/.82})`);g.addColorStop(.78,`rgba(14,22,10,${.32*a/.82})`);g.addColorStop(1,'rgba(14,22,10,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,H-gh,W,gh);
+  ctx.textBaseline='alphabetic';
+  const KR="'Noto Sans KR','Apple SD Gothic Neo',sans-serif", EN="'League Spartan','Noto Sans KR',sans-serif";
+  const L=36*S, R=W-36*S, maxW=R-L, cream='#FAF8F3', org='#F08537';
+  // 본문(아래부터 위로)
+  let y=H-72*S;
+  const bodyFont=`500 ${18*S}px ${KR}`, bodyLs=-.6*S, bodyLH=18*S*1.55;
+  const bodyLines=$('body').value.trim()?wrap($('body').value.trim(),bodyFont,bodyLs,maxW-56*S):[];
+  const titleFont=`900 ${38*S}px ${KR}`, titleLs=-1.6*S, titleLH=38*S*1.28;
+  const titleLines=$('title').value.trim()?$('title').value.trim().split('\n'):[];
+  // 블록 높이 계산 후 아래 기준 정렬
+  let bodyH=bodyLines.length?bodyLines.length*bodyLH:0;
+  let blockBottom=H-72*S;
+  // 본문
+  let by=blockBottom-bodyH+bodyLH*0.78;
+  ctx.fillStyle='rgba(250,248,243,.94)';
+  bodyLines.forEach((ln,i)=>{drawRuns([{t:ln,c:'rgba(250,248,243,.94)'}],L,by+i*bodyLH,bodyFont,bodyLs)});
+  // 제목
+  let titleBottom=blockBottom-bodyH-(bodyLines.length?12*S:0);
+  let ty=titleBottom-titleLines.length*titleLH+titleLH*0.82;
+  titleLines.forEach((ln,i)=>drawRuns(parseRuns(ln,cream,org),L,ty+i*titleLH,titleFont,titleLs));
+  const titleTop=titleBottom-titleLines.length*titleLH;
+  // 배지
+  const bt=$('badge').value.trim();
+  if(bt){
+    const bf=`800 ${14*S}px ${EN}`, bl=2*S, bw=runWidth(bt,bf,bl)-bl+22*S, bh=14*S+8*S+6*S;
+    const bx=L, by2=92*S;
+    ctx.fillStyle=org;ctx.beginPath();ctx.roundRect?ctx.roundRect(bx,by2,bw,bh,5*S):ctx.rect(bx,by2,bw,bh);ctx.fill();
+    drawRuns([{t:bt,c:cream}],bx+11*S,by2+bh-9*S,bf,bl);
+  }
+  // 쪽번호
+  const pt=$('page').value.trim();
+  if(pt){const pf=`800 ${14*S}px ${EN}`,pl=1.5*S;const pw=runWidth(pt,pf,pl)-pl;ctx.globalAlpha=.85;drawRuns([{t:pt,c:cream}],R-pw,H-72*S,pf,pl);ctx.globalAlpha=1}
+  $('v1').textContent=$('gA').value+'%';$('v2').textContent=$('gH').value+'%';$('v3').textContent=Math.round(st.zoom*100)+'%';$('v4').textContent=st.ang+'°';
+}
+function redraw(){draw();}
+ids.forEach(i=>$(i).addEventListener('input',()=>{persist();redraw()}));
+$('zoom').addEventListener('input',e=>{st.zoom=e.target.value/100;redraw()});
+$('ang').addEventListener('input',e=>{st.ang=parseFloat(e.target.value);redraw()});
+
+// 사진 불러오기
+$('pick').onclick=()=>$('file').click();
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const im=new Image();im.onload=()=>{img=im;st={ox:0,oy:0,zoom:1,ang:0,rot:0};$('zoom').value=100;$('ang').value=0;$('hint').style.display='none';redraw()};im.src=u};
+$('rot').onclick=()=>{st.rot=(st.rot+1)%4;redraw()};
+$('reset').onclick=()=>{st.ox=st.oy=0;st.zoom=1;st.ang=0;$('zoom').value=100;$('ang').value=0;redraw()};
+
+// 끌기·핀치
+const stage=$('stage');const pts=new Map();let last=null;
+function k(){return W/stage.getBoundingClientRect().width}
+stage.addEventListener('pointerdown',e=>{stage.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});last=null});
+stage.addEventListener('pointermove',e=>{
+  if(!pts.has(e.pointerId))return;const p=pts.get(e.pointerId);const px=p.x,py=p.y;p.x=e.clientX;p.y=e.clientY;
+  if(pts.size===1){st.ox+=(e.clientX-px)*k();st.oy+=(e.clientY-py)*k();redraw()}
+  else if(pts.size===2){const [a,b]=[...pts.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(last){st.zoom=Math.min(4,Math.max(1,st.zoom*d/last));$('zoom').value=Math.round(st.zoom*100);redraw()}last=d}
+});
+const up=e=>{pts.delete(e.pointerId);last=null};stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
+stage.addEventListener('wheel',e=>{e.preventDefault();st.zoom=Math.min(4,Math.max(1,st.zoom*(e.deltaY<0?1.05:.95)));$('zoom').value=Math.round(st.zoom*100);redraw()},{passive:false});
+
+// 저장
+$('save').onclick=()=>{cv.toBlob(async b=>{const f=new File([b],'kookcard.png',{type:'image/png'});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return}catch(e){if(e.name==='AbortError')return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='kookcard.png';a.click()},'image/png')};
+
+// 홈 화면 아이콘
+(function(){const c=document.createElement('canvas');c.width=c.height=180;const x=c.getContext('2d');x.fillStyle='#3F5128';x.fillRect(0,0,180,180);x.fillStyle='#F08537';x.font='900 84px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('KOOK',90,90);$('icon').href=c.toDataURL('image/png')})();
+
+redraw();
+if(document.fonts){Promise.all([document.fonts.load("900 38px 'Noto Sans KR'"),document.fonts.load("500 18px 'Noto Sans KR'"),document.fonts.load("800 14px 'League Spartan'")]).then(redraw).catch(()=>{});document.fonts.ready.then(redraw)}
+</script>
+</body>
+</html>
